@@ -64,13 +64,19 @@ fi
 
 exec 9>"$ROOT/.lock"
 flock -n 9 || { log "another backup is running"; exit 0; }
-trap 'rc=$?; log "FAILED (exit $rc) at line $LINENO"; status_set "lastError=\"line $LINENO exit $rc\""; alert "Backup FAILED at line $LINENO (exit $rc)."' ERR
+on_error() {
+  local rc=$? line=$1
+  log "FAILED (exit $rc) at line $line"
+  status_set "lastError=\"line $line exit $rc\""
+  alert "Backup FAILED at line $line (exit $rc)."
+}
+trap 'on_error $LINENO' ERR
 
 [ -s "$PASS_FILE" ] || { log "missing passphrase file $PASS_FILE"; exit 2; }
 STAMP="$(date +%Y%m%d-%H%M)"
 TODAY="$(date +%Y%m%d)"
 TIER="H"                                                          # H = hourly-tier copy
-ls "$ROOT/files"/files-"$TODAY"-*-D.tar.gz.gpg >/dev/null 2>&1 || TIER="D"   # first run of the day = long-term D copy
+ls "$ROOT/files/files-${TODAY}"-*-D.tar.gz.gpg >/dev/null 2>&1 || TIER="D"   # first run of the day = long-term D copy
 status_set "lastRun=\"$(date -u +%FT%TZ)\""
 
 enc() { gpg --batch --yes --quiet --pinentry-mode loopback --symmetric --cipher-algo AES256 --passphrase-file "$PASS_FILE" -o "$2" "$1"; }
